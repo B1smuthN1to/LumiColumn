@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "name": "Card Column Control",
+  "identifier": "card_column_control",
+  "author": "You",
+  "github": "https://github.com/you/card-column-control",
+  "homepage": "https://github.com/you/card-column-control",
+  "description": "Adds a drawer tab with a slider/input to dynamically set how many character cards appear per row in the grid view.",
+  "permissions": [],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js"
+}
