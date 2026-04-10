@@ -1,12 +1,13 @@
 {
   "version": "1.0.0",
-  "name": "Card Column Control",
-  "identifier": "card_column_control",
-  "author": "You",
-  "github": "https://github.com/you/card-column-control",
-  "homepage": "https://github.com/you/card-column-control",
-  "description": "Adds a drawer tab with a slider/input to dynamically set how many character cards appear per row in the grid view.",
+  "name": "Mobile Grid Columns",
+  "identifier": "mobile_grid_columns",
+  "author": "Your Name",
+  "github": "https://github.com/you/mobile-grid-columns",
+  "homepage": "https://github.com/you/mobile-grid-columns",
+  "description": "Override the grid-template-columns on container v15ny_1 for mobile devices. Configure how many columns to display and populate the grid with dynamic cards.",
   "permissions": [],
   "entry_backend": "dist/backend.js",
-  "entry_frontend": "dist/frontend.js"
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "0.1.0"
 }

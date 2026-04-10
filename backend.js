@@ -1,56 +1,67 @@
-// dist/backend.js
-// Card Column Control — backend module
-//
-// Responsibilities:
-//   1. Persist the column preference to spindle.storage
-//   2. Relay the current value to the frontend when it asks
-//   3. Relay updated values back to the frontend after saving
+/**
+ * Mobile Grid Columns — Backend (dist/backend.js)
+ *
+ * Responsibilities:
+ *   - Persist user settings (column count, card data) via spindle.storage
+ *   - Relay settings to the frontend on demand
+ *   - Handle messages from the frontend to read/write settings
+ */
 
-const STORAGE_KEY = "column_preference.json";
-const DEFAULT_COLUMNS = 3;
+const DEFAULT_SETTINGS = {
+  mobileColumns: 2,
+  cards: [
+    { title: "Card 1", body: "Your first card content goes here." },
+    { title: "Card 2", body: "Your second card content goes here." },
+    { title: "Card 3", body: "Your third card content goes here." },
+    { title: "Card 4", body: "Your fourth card content goes here." },
+  ],
+};
 
-async function loadColumns() {
+const SETTINGS_FILE = "settings.json";
+
+/**
+ * Read settings from storage, falling back to defaults.
+ */
+async function loadSettings() {
   try {
-    const raw = await spindle.storage.getJson(STORAGE_KEY, {
-      fallback: { columns: DEFAULT_COLUMNS },
+    return await spindle.storage.getJson(SETTINGS_FILE, {
+      fallback: DEFAULT_SETTINGS,
     });
-    const n = parseInt(raw.columns, 10);
-    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : DEFAULT_COLUMNS;
   } catch {
-    return DEFAULT_COLUMNS;
+    return { ...DEFAULT_SETTINGS };
   }
 }
 
-async function saveColumns(n) {
-  await spindle.storage.setJson(STORAGE_KEY, { columns: n }, { indent: 2 });
+/**
+ * Persist settings to storage.
+ */
+async function saveSettings(settings) {
+  await spindle.storage.setJson(SETTINGS_FILE, settings, { indent: 2 });
 }
 
-// Listen for messages from the frontend
-spindle.onFrontendMessage(async (payload) => {
-  if (!payload || typeof payload !== "object") return;
+// ── Message handlers (frontend → backend) ─────────────────────────────────
 
-  // Frontend is asking for the current value on load
-  if (payload.type === "get_columns") {
-    const columns = await loadColumns();
-    spindle.sendToFrontend({ type: "columns_value", columns });
+spindle.on("message", async (msg) => {
+  const { type, payload } = msg;
+
+  if (type === "GET_SETTINGS") {
+    const settings = await loadSettings();
+    spindle.frontend.send({ type: "SETTINGS", payload: settings });
     return;
   }
 
-  // Frontend is setting a new value
-  if (payload.type === "set_columns") {
-    const n = parseInt(payload.columns, 10);
-    if (!Number.isFinite(n) || n < 1 || n > 10) {
-      spindle.sendToFrontend({
-        type: "columns_error",
-        message: "Column count must be between 1 and 10.",
-      });
-      return;
+  if (type === "SAVE_SETTINGS") {
+    try {
+      await saveSettings(payload);
+      spindle.frontend.send({ type: "SETTINGS_SAVED", payload });
+      spindle.toast.success("Grid settings saved!");
+    } catch (err) {
+      spindle.log.error(`Failed to save settings: ${err.message}`);
+      spindle.toast.error("Failed to save settings.");
     }
-    await saveColumns(n);
-    spindle.sendToFrontend({ type: "columns_value", columns: n });
-    spindle.toast.success(`Card columns set to ${n}`);
     return;
   }
 });
 
-spindle.log.info("Card Column Control backend ready.");
+// On startup, log that the extension is live
+spindle.log.info("[mobile_grid_columns] Backend ready.");
