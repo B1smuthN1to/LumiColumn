@@ -1,0 +1,12 @@
+{
+  "name": "mobile-grid-columns",
+  "version": "1.0.0",
+  "description": "Lumiverse extension — override grid-template-columns on v15ny_1 for mobile",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}
