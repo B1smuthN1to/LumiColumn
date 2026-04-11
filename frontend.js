@@ -1,429 +1,268 @@
-// dist/frontend.js
-// Card Column Control — frontend module
-//
-// What this does:
-//   1. Registers a drawer tab with a polished column-picker UI
-//   2. On load, fetches the saved preference from the backend
-//   3. When the user changes the value, tells the backend + applies the override
-//   4. Applies the override by injecting a <style> tag that forces grid columns
-//      AND by patching the ResizeObserver min-column behaviour via a MutationObserver
-//      that watches for the grid rows and rewrites gridTemplateColumns in-place.
+/**
+ * Mobile Column Layout — dist/frontend.js
+ *
+ * Lumiverse loads frontend modules via dynamic import() and calls the exported
+ * `init(ctx)` function.  This file is the compiled/bundled output; because
+ * there are no external dependencies we can ship the source directly.
+ *
+ * See src/frontend.js for full documentation.
+ */
 
-export default function init(ctx) {
-  // ─── State ────────────────────────────────────────────────────────────────
-  let currentColumns = 3;
-  let styleTag = null;
-  let patchObserver = null;
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-  // ─── Drawer tab ───────────────────────────────────────────────────────────
-  const tab = ctx.ui.registerDrawerTab({
-    id: "col-control",
-    title: "Columns",
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="2" y="3" width="4" height="14" rx="1"/>
-      <rect x="8" y="3" width="4" height="14" rx="1"/>
-      <rect x="14" y="3" width="4" height="14" rx="1"/>
-    </svg>`,
-  });
+const DEFAULT_COLUMNS    = 2;
+const MIN_COLUMNS        = 2;
+const MAX_COLUMNS        = 6;
+const MOBILE_BREAKPOINT  = 600;
 
-  // ─── Inject tab CSS ────────────────────────────────────────────────────────
-  ctx.ui.injectStyle(`
-    .ccc-root {
-      font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
-      padding: 18px 16px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      color: var(--lumiverse-text, #e8e0f0);
-    }
+const SEL_SCROLL         = '._scrollContainer_v15ny_1';
+const SEL_ROW            = '._row_v15ny_14';
+const SEL_THEMES_PANEL   = '._panel_1gfvo_1';
+const SETTINGS_EL_ID     = 'mcl-settings-block';
 
-    .ccc-eyebrow {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      color: var(--lumiverse-text-dim, #9080a8);
-      margin-bottom: 12px;
-    }
+// ── State ─────────────────────────────────────────────────────────────────────
 
-    .ccc-card {
-      background: var(--lumiverse-surface-2, rgba(255,255,255,.045));
-      border: 1px solid var(--lumiverse-border, rgba(255,255,255,.08));
-      border-radius: 12px;
-      padding: 18px 16px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+let currentColumns   = DEFAULT_COLUMNS;
+let removeStyle      = null;
+let settingsObserver = null;
 
-    .ccc-preview {
-      display: grid;
-      gap: 5px;
-      height: 52px;
-      transition: grid-template-columns 200ms cubic-bezier(.4,0,.2,1);
-    }
+// ── CSS builder ──────────────────────────────────────────────────────────────
 
-    .ccc-preview-cell {
-      border-radius: 5px;
-      background: var(--lumiverse-primary, #9370db);
-      opacity: .25;
-      transition: opacity 200ms;
-    }
-    .ccc-preview-cell.active { opacity: .75; }
+function buildGridCSS(cols) {
+  const gap = cols <= 3 ? 8 : 6;
 
-    .ccc-label-row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-    }
+  return `
+/* ── Mobile Column Layout extension ── */
+@media (max-width: ${MOBILE_BREAKPOINT}px) {
 
-    .ccc-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--lumiverse-text, #e8e0f0);
-    }
+  /* Convert the single-column row into a CSS grid */
+  ${SEL_SCROLL} ${SEL_ROW} {
+    display: grid !important;
+    grid-template-columns: repeat(${cols}, 1fr) !important;
+    gap: ${gap}px !important;
+    padding: ${gap}px !important;
+    align-content: start !important;
+    flex-direction: unset !important;
+  }
 
-    .ccc-value-badge {
-      font-size: 20px;
-      font-weight: 800;
-      line-height: 1;
-      color: var(--lumiverse-primary, #9370db);
-      font-variant-numeric: tabular-nums;
-      min-width: 28px;
-      text-align: right;
-    }
+  /* Each direct child fills its grid cell */
+  ${SEL_SCROLL} ${SEL_ROW} > * {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
 
-    .ccc-slider-wrap {
-      position: relative;
-      height: 28px;
-      display: flex;
-      align-items: center;
-    }
+  /* ── ._card_q6j3q_1  (standard character card) ── */
+  ${SEL_SCROLL} ${SEL_ROW} > ._card_q6j3q_1 {
+    flex-direction: column !important;
+    border-radius: var(--lumiverse-radius-lg, 12px) !important;
+    overflow: hidden !important;
+    contain: layout style paint !important;
+  }
 
-    .ccc-track {
-      position: absolute;
-      left: 0; right: 0;
-      height: 4px;
-      border-radius: 99px;
-      background: var(--lumiverse-border, rgba(255,255,255,.1));
-      pointer-events: none;
-    }
+  ${SEL_SCROLL} ${SEL_ROW} > ._card_q6j3q_1 ._imageWrap_q6j3q_40 {
+    aspect-ratio: 3 / 4 !important;
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 0 !important;
+  }
 
-    .ccc-fill {
-      position: absolute;
-      left: 0;
-      height: 4px;
-      border-radius: 99px;
-      background: var(--lumiverse-primary, #9370db);
-      pointer-events: none;
-      transition: width 120ms;
-    }
+  /* ── ._gridCard_1xexo_72  (grid-layout card variant) ── */
+  ${SEL_SCROLL} ${SEL_ROW} > ._gridCard_1xexo_72 {
+    border-radius: 14px !important;
+  }
 
-    .ccc-range {
-      position: relative;
-      width: 100%;
-      -webkit-appearance: none;
-      appearance: none;
-      height: 28px;
-      background: transparent;
-      cursor: pointer;
-      outline: none;
-      z-index: 1;
-    }
-    .ccc-range::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--lumiverse-primary, #9370db);
-      border: 2px solid var(--lumiverse-bg, #1a1425);
-      box-shadow: 0 0 0 0 rgba(147,112,219,.4);
-      transition: box-shadow 150ms;
-    }
-    .ccc-range:focus::-webkit-slider-thumb,
-    .ccc-range:active::-webkit-slider-thumb {
-      box-shadow: 0 0 0 5px rgba(147,112,219,.3);
-    }
-    .ccc-range::-moz-range-thumb {
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      background: var(--lumiverse-primary, #9370db);
-      border: 2px solid var(--lumiverse-bg, #1a1425);
-    }
+  ${SEL_SCROLL} ${SEL_ROW} > ._gridCard_1xexo_72 ._gridCardImage_1xexo_89 {
+    aspect-ratio: 3 / 4 !important;
+    width: 100% !important;
+  }
 
-    .ccc-step-row {
-      display: flex;
-      gap: 6px;
-    }
+  /* ── ._listCard_1xexo_177  (list-layout card reflowed as portrait tile) ── */
+  ${SEL_SCROLL} ${SEL_ROW} > ._listCard_1xexo_177 {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    border-radius: 12px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
 
-    .ccc-step {
-      flex: 1;
-      height: 32px;
-      border-radius: 7px;
-      border: 1px solid var(--lumiverse-border, rgba(255,255,255,.1));
-      background: transparent;
-      color: var(--lumiverse-text-dim, #9080a8);
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 120ms, color 120ms, border-color 120ms;
-    }
-    .ccc-step:hover {
-      background: var(--lumiverse-surface-2, rgba(255,255,255,.06));
-      color: var(--lumiverse-text, #e8e0f0);
-    }
-    .ccc-step.active {
-      background: color-mix(in srgb, var(--lumiverse-primary, #9370db) 18%, transparent);
-      border-color: var(--lumiverse-primary, #9370db);
-      color: var(--lumiverse-primary, #9370db);
-    }
+  ${SEL_SCROLL} ${SEL_ROW} > ._listCard_1xexo_177 ._imageWrap_q6j3q_40 {
+    aspect-ratio: 3 / 4 !important;
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 0 !important;
+  }
 
-    .ccc-number-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+  ${SEL_SCROLL} ${SEL_ROW} > ._listCard_1xexo_177 ._listCardInfo_1xexo_199 {
+    padding: 8px 10px !important;
+  }
+}
+  `.trim();
+}
 
-    .ccc-number-label {
-      flex: 1;
-      font-size: 11px;
-      color: var(--lumiverse-text-dim, #9080a8);
-    }
+// ── Style management ──────────────────────────────────────────────────────────
 
-    .ccc-number-input {
-      width: 56px;
-      height: 30px;
-      border-radius: 7px;
-      border: 1px solid var(--lumiverse-border, rgba(255,255,255,.1));
-      background: var(--lumiverse-surface-2, rgba(255,255,255,.04));
-      color: var(--lumiverse-text, #e8e0f0);
-      font-size: 13px;
-      font-weight: 600;
-      text-align: center;
-      outline: none;
-      transition: border-color 120ms;
-      -moz-appearance: textfield;
-    }
-    .ccc-number-input::-webkit-outer-spin-button,
-    .ccc-number-input::-webkit-inner-spin-button { -webkit-appearance: none; }
-    .ccc-number-input:focus {
-      border-color: var(--lumiverse-primary, #9370db);
-    }
+function applyGridStyle(ctx, cols) {
+  if (removeStyle) {
+    removeStyle();
+    removeStyle = null;
+  }
+  currentColumns = cols;
+  removeStyle = ctx.dom.addStyle(buildGridCSS(cols));
+}
 
-    .ccc-hint {
-      font-size: 10.5px;
-      color: var(--lumiverse-text-dim, #9080a8);
-      line-height: 1.5;
-      margin-top: 2px;
-    }
+// ── Settings UI injection ─────────────────────────────────────────────────────
 
-    .ccc-status {
-      font-size: 11px;
-      font-weight: 600;
-      min-height: 16px;
-      color: var(--lumiverse-success, #22c55e);
-      opacity: 0;
-      transition: opacity 300ms;
-      text-align: center;
-    }
-    .ccc-status.show { opacity: 1; }
-    .ccc-status.error { color: var(--lumiverse-danger, #ef4444); }
-  `);
+function injectSettingsUI(ctx, panel) {
+  if (document.getElementById(SETTINGS_EL_ID)) return;
 
-  // ─── Build tab DOM ─────────────────────────────────────────────────────────
-  const MIN = 1;
-  const MAX = 10;
-  const PRESETS = [1, 2, 3, 4, 5, 6];
+  const wrapper = document.createElement('div');
+  wrapper.id = SETTINGS_EL_ID;
+  wrapper.className = '_section_1gfvo_8';
+  wrapper.style.cssText = 'margin-top: 8px;';
 
-  const root = document.createElement("div");
-  root.className = "ccc-root";
-
-  root.innerHTML = `
-    <div class="ccc-eyebrow">Character Grid</div>
-    <div class="ccc-card">
-
-      <!-- Live mini-preview -->
-      <div class="ccc-preview" id="ccc-preview"></div>
-
-      <!-- Label + big number -->
-      <div class="ccc-label-row">
-        <span class="ccc-label">Columns per row</span>
-        <span class="ccc-value-badge" id="ccc-badge">3</span>
-      </div>
-
-      <!-- Slider -->
-      <div class="ccc-slider-wrap">
-        <div class="ccc-track"></div>
-        <div class="ccc-fill" id="ccc-fill"></div>
-        <input class="ccc-range" id="ccc-range" type="range" min="${MIN}" max="${MAX}" step="1" value="3">
-      </div>
-
-      <!-- Preset buttons -->
-      <div class="ccc-step-row" id="ccc-steps">
-        ${PRESETS.map(n => `<button class="ccc-step" data-n="${n}">${n}</button>`).join("")}
-      </div>
-
-      <!-- Direct number input -->
-      <div class="ccc-number-row">
-        <span class="ccc-number-label">Or type a value (1–10):</span>
-        <input class="ccc-number-input" id="ccc-number" type="number" min="${MIN}" max="${MAX}" value="3">
-      </div>
-
-      <div class="ccc-hint">Changes apply instantly to the character browser grid. Your preference is saved automatically.</div>
-      <div class="ccc-status" id="ccc-status"></div>
+  wrapper.innerHTML = `
+    <div class="_sectionLabel_1gfvo_14" style="margin-bottom:6px;">
+      Mobile Column Count
     </div>
-  `;
+    <div style="display:flex;align-items:center;gap:10px;">
+      <input
+        id="mcl-col-input"
+        type="number"
+        min="${MIN_COLUMNS}"
+        max="${MAX_COLUMNS}"
+        step="1"
+        value="${currentColumns}"
+        class="_input_18qkb_94"
+        style="width:72px;padding:7px 10px;text-align:center;"
+        aria-label="Number of columns on mobile"
+      />
+      <button
+        id="mcl-col-apply"
+        class="_actionBtn_1gfvo_28"
+        style="flex:unset;padding:7px 16px;"
+        aria-label="Apply column count"
+      >Apply</button>
+      <span
+        id="mcl-col-status"
+        style="font-size:11px;color:var(--lumiverse-text-dim);opacity:0;transition:opacity .3s ease;"
+      ></span>
+    </div>
+    <p class="_formHint_18qkb_44" style="margin-top:6px;">
+      Number of columns in the character/content list on mobile
+      (&le;&thinsp;${MOBILE_BREAKPOINT}&thinsp;px).
+      Accepted range: ${MIN_COLUMNS}&ndash;${MAX_COLUMNS}.
+      Changes apply immediately and are saved per user.
+    </p>
+  `.trim();
 
-  tab.root.appendChild(root);
+  panel.appendChild(wrapper);
 
-  // ─── DOM refs ──────────────────────────────────────────────────────────────
-  const previewEl   = root.querySelector("#ccc-preview");
-  const badgeEl     = root.querySelector("#ccc-badge");
-  const fillEl      = root.querySelector("#ccc-fill");
-  const rangeEl     = root.querySelector("#ccc-range");
-  const stepsEl     = root.querySelector("#ccc-steps");
-  const numberEl    = root.querySelector("#ccc-number");
-  const statusEl    = root.querySelector("#ccc-status");
+  // ── Event wiring ─────────────────────────────────────────────────────────
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-  let statusTimer = null;
+  const input    = wrapper.querySelector('#mcl-col-input');
+  const applyBtn = wrapper.querySelector('#mcl-col-apply');
+  const statusEl = wrapper.querySelector('#mcl-col-status');
+  let   statusTimer = null;
 
-  function showStatus(msg, isError = false) {
+  function showStatus(text, color) {
+    statusEl.textContent = text;
+    statusEl.style.color = color || 'var(--lumiverse-text-dim)';
+    statusEl.style.opacity = '1';
     clearTimeout(statusTimer);
-    statusEl.textContent = msg;
-    statusEl.className = "ccc-status show" + (isError ? " error" : "");
-    statusTimer = setTimeout(() => {
-      statusEl.className = "ccc-status";
-    }, 2400);
+    statusTimer = setTimeout(() => { statusEl.style.opacity = '0'; }, 2400);
   }
 
-  function updateUI(n) {
-    const pct = ((n - MIN) / (MAX - MIN)) * 100;
-
-    badgeEl.textContent = n;
-    rangeEl.value = n;
-    numberEl.value = n;
-    fillEl.style.width = pct + "%";
-
-    // Preview cells
-    previewEl.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
-    previewEl.innerHTML = Array.from({ length: n })
-      .map((_, i) => `<div class="ccc-preview-cell${i === 0 ? " active" : ""}"></div>`)
-      .join("");
-
-    // Preset buttons
-    stepsEl.querySelectorAll(".ccc-step").forEach(btn => {
-      btn.classList.toggle("active", parseInt(btn.dataset.n) === n);
-    });
-  }
-
-  // ─── Apply override to the page ───────────────────────────────────────────
-  //
-  // Strategy: inject a <style> that overrides the inline gridTemplateColumns
-  // on any ._row_v15ny_14 element. Because the row style is set inline via JS,
-  // we can't beat it with a stylesheet rule alone — so we ALSO run a lightweight
-  // MutationObserver that patches new row elements as they're added to the DOM.
-
-  function applyColumnOverride(n) {
-    currentColumns = n;
-
-    // 1. Style-tag override (for rows that already exist or get added)
-    if (!styleTag) {
-      styleTag = document.createElement("style");
-      styleTag.id = "ccc-override";
-      document.head.appendChild(styleTag);
-    }
-    // The !important here wins over the inline style
-    styleTag.textContent = `
-      ._row_v15ny_14 {
-        grid-template-columns: repeat(${n}, 1fr) !important;
-      }
-    `;
-
-    // 2. MutationObserver — patches inline style on each new row element
-    //    (the virtualizer sets gridTemplateColumns inline per row)
-    if (patchObserver) patchObserver.disconnect();
-
-    patchObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (!(node instanceof HTMLElement)) continue;
-          patchRow(node);
-          node.querySelectorAll("._row_v15ny_14").forEach(patchRow);
-        }
-      }
-    });
-
-    // Patch existing rows immediately
-    document.querySelectorAll("._row_v15ny_14").forEach(patchRow);
-
-    // Watch the whole app for new rows
-    patchObserver.observe(document.body, { childList: true, subtree: true });
-  }
-
-  function patchRow(el) {
-    if (!el.classList.contains("_row_v15ny_14")) return;
-    // Force the column count — overrides whatever the virtualizer set
-    el.style.setProperty("grid-template-columns", `repeat(${currentColumns}, 1fr)`, "important");
-  }
-
-  // ─── Event wiring ─────────────────────────────────────────────────────────
-
-  function commitValue(n) {
-    n = Math.max(MIN, Math.min(MAX, n));
-    if (!Number.isFinite(n)) return;
-    updateUI(n);
-    applyColumnOverride(n);
-    ctx.sendToBackend({ type: "set_columns", columns: n });
-  }
-
-  rangeEl.addEventListener("input", () => {
-    commitValue(parseInt(rangeEl.value, 10));
-  });
-
-  stepsEl.addEventListener("click", (e) => {
-    const btn = e.target.closest(".ccc-step");
-    if (!btn) return;
-    commitValue(parseInt(btn.dataset.n, 10));
-  });
-
-  numberEl.addEventListener("change", () => {
-    const n = parseInt(numberEl.value, 10);
-    if (Number.isFinite(n)) commitValue(n);
-  });
-  numberEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      const n = parseInt(numberEl.value, 10);
-      if (Number.isFinite(n)) commitValue(n);
-    }
-  });
-
-  // ─── Backend messages ─────────────────────────────────────────────────────
-  ctx.onBackendMessage((payload) => {
-    if (!payload) return;
-
-    if (payload.type === "columns_value") {
-      currentColumns = payload.columns;
-      updateUI(payload.columns);
-      applyColumnOverride(payload.columns);
+  function commitColumns() {
+    const raw     = parseInt(input.value, 10);
+    if (isNaN(raw)) {
+      showStatus('Invalid', 'var(--lumiverse-danger, #ef4444)');
       return;
     }
+    const clamped = Math.min(MAX_COLUMNS, Math.max(MIN_COLUMNS, raw));
+    if (clamped !== raw) input.value = clamped;
 
-    if (payload.type === "columns_error") {
-      showStatus(payload.message, true);
+    // Optimistically apply the CSS so the user sees the change right away
+    applyGridStyle(ctx, clamped);
+
+    // Persist via backend
+    ctx.backend.send({ type: 'SET_COLUMNS', columns: clamped });
+    applyBtn.disabled    = true;
+    applyBtn.textContent = 'Saving…';
+  }
+
+  applyBtn.addEventListener('click', commitColumns);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitColumns(); }
+  });
+
+  // Listen for backend confirmation messages from within the settings block
+  ctx.backend.onMessage((msg) => {
+    if (!msg || typeof msg !== 'object') return;
+
+    if (msg.type === 'COLUMNS_SAVED') {
+      applyBtn.disabled    = false;
+      applyBtn.textContent = 'Apply';
+      input.value          = msg.columns;
+      showStatus('✓ Saved', 'var(--lumiverse-success, #22c55e)');
+    }
+
+    if (msg.type === 'COLUMNS_ERROR') {
+      applyBtn.disabled    = false;
+      applyBtn.textContent = 'Apply';
+      showStatus('Error saving', 'var(--lumiverse-danger, #ef4444)');
+    }
+  });
+}
+
+// ── Themes panel watcher ──────────────────────────────────────────────────────
+
+function watchForThemesPanel(ctx) {
+  if (settingsObserver) return;
+
+  function tryInject() {
+    const panel = document.querySelector(SEL_THEMES_PANEL);
+    if (panel) injectSettingsUI(ctx, panel);
+  }
+
+  tryInject(); // immediate attempt if panel is already open
+
+  settingsObserver = new MutationObserver(() => {
+    if (!document.getElementById(SETTINGS_EL_ID)) tryInject();
+  });
+
+  settingsObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+export function init(ctx) {
+  // ── Step 1: request the persisted column value from the backend ──────────
+  ctx.backend.onMessage((msg) => {
+    if (!msg || typeof msg !== 'object') return;
+
+    if (msg.type === 'COLUMNS_VALUE') {
+      currentColumns = msg.columns;
+      applyGridStyle(ctx, currentColumns);
+
+      // Sync the input if the settings panel is already open
+      const input = document.getElementById('mcl-col-input');
+      if (input) input.value = currentColumns;
     }
   });
 
-  // ─── Init: ask backend for saved value ────────────────────────────────────
-  updateUI(currentColumns);          // render default immediately
-  applyColumnOverride(currentColumns);
-  ctx.sendToBackend({ type: "get_columns" });
+  ctx.backend.send({ type: 'GET_COLUMNS' });
 
-  // ─── Cleanup ──────────────────────────────────────────────────────────────
-  // Returned from init — called when the extension is disabled/removed
-  return () => {
-    if (patchObserver) patchObserver.disconnect();
-    if (styleTag && styleTag.parentNode) styleTag.parentNode.removeChild(styleTag);
-    tab.destroy();
-  };
+  // ── Step 2: apply a baseline style immediately so there is no flash ───────
+  applyGridStyle(ctx, DEFAULT_COLUMNS);
+
+  // ── Step 3: watch for the Themes panel ────────────────────────────────────
+  watchForThemesPanel(ctx);
+
+  // ── Step 4: graceful cleanup when the extension is disabled ───────────────
+  ctx.on('EXTENSION_UNLOADED', () => {
+    if (removeStyle)        { removeStyle(); removeStyle = null; }
+    if (settingsObserver)   { settingsObserver.disconnect(); settingsObserver = null; }
+    const block = document.getElementById(SETTINGS_EL_ID);
+    if (block) block.remove();
+  });
 }

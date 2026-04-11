@@ -1,56 +1,77 @@
-// dist/backend.js
-// Card Column Control — backend module
-//
-// Responsibilities:
-//   1. Persist the column preference to spindle.storage
-//   2. Relay the current value to the frontend when it asks
-//   3. Relay updated values back to the frontend after saving
+/**
+ * Mobile Column Layout — backend.js
+ *
+ * Responsibilities:
+ *  - Persist the user's chosen column count via spindle.userStorage
+ *  - Relay the current setting to the frontend on request
+ *  - Relay save requests from the frontend back to storage
+ *
+ * All storage keys follow the pattern:  mobile_column_layout:<key>
+ */
 
-const STORAGE_KEY = "column_preference.json";
-const DEFAULT_COLUMNS = 3;
+const STORAGE_KEY = 'mobile_column_layout:columns';
+const DEFAULT_COLUMNS = 2;
 
-async function loadColumns() {
-  try {
-    const raw = await spindle.storage.getJson(STORAGE_KEY, {
-      fallback: { columns: DEFAULT_COLUMNS },
-    });
-    const n = parseInt(raw.columns, 10);
-    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : DEFAULT_COLUMNS;
-  } catch {
-    return DEFAULT_COLUMNS;
-  }
+/**
+ * Clamp and validate a raw column value coming from the frontend.
+ * Accepted range: 2–6 columns.
+ */
+function sanitiseColumns(raw) {
+  const n = parseInt(raw, 10);
+  if (isNaN(n)) return DEFAULT_COLUMNS;
+  return Math.min(6, Math.max(2, n));
 }
 
-async function saveColumns(n) {
-  await spindle.storage.setJson(STORAGE_KEY, { columns: n }, { indent: 2 });
-}
+// ── Bootstrap ────────────────────────────────────────────────────────────────
 
-// Listen for messages from the frontend
-spindle.onFrontendMessage(async (payload) => {
-  if (!payload || typeof payload !== "object") return;
+spindle.on('EXTENSION_LOADED', async () => {
+  spindle.log.info('[mobile_column_layout] backend loaded');
 
-  // Frontend is asking for the current value on load
-  if (payload.type === "get_columns") {
-    const columns = await loadColumns();
-    spindle.sendToFrontend({ type: "columns_value", columns });
-    return;
-  }
-
-  // Frontend is setting a new value
-  if (payload.type === "set_columns") {
-    const n = parseInt(payload.columns, 10);
-    if (!Number.isFinite(n) || n < 1 || n > 10) {
-      spindle.sendToFrontend({
-        type: "columns_error",
-        message: "Column count must be between 1 and 10.",
-      });
-      return;
-    }
-    await saveColumns(n);
-    spindle.sendToFrontend({ type: "columns_value", columns: n });
-    spindle.toast.success(`Card columns set to ${n}`);
-    return;
+  // Ensure a default value exists if the user has never saved a preference.
+  const existing = await spindle.userStorage.get(STORAGE_KEY);
+  if (existing === null || existing === undefined) {
+    await spindle.userStorage.set(STORAGE_KEY, String(DEFAULT_COLUMNS));
+    spindle.log.info(`[mobile_column_layout] initialised default columns → ${DEFAULT_COLUMNS}`);
   }
 });
 
-spindle.log.info("Card Column Control backend ready.");
+// ── Message handlers (frontend → backend) ────────────────────────────────────
+
+/**
+ * Frontend sends  { type: 'GET_COLUMNS' }
+ * Backend replies { columns: <number> }
+ */
+spindle.on('MESSAGE_FROM_FRONTEND', async (msg) => {
+  if (!msg || typeof msg !== 'object') return;
+
+  // ── GET_COLUMNS ─────────────────────────────────────────────────────────────
+  if (msg.type === 'GET_COLUMNS') {
+    let columns = DEFAULT_COLUMNS;
+    try {
+      const stored = await spindle.userStorage.get(STORAGE_KEY);
+      if (stored !== null && stored !== undefined) {
+        columns = sanitiseColumns(stored);
+      }
+    } catch (err) {
+      spindle.log.warn(`[mobile_column_layout] failed to read storage: ${err.message}`);
+    }
+
+    spindle.sendToFrontend({ type: 'COLUMNS_VALUE', columns });
+    return;
+  }
+
+  // ── SET_COLUMNS ─────────────────────────────────────────────────────────────
+  if (msg.type === 'SET_COLUMNS') {
+    const columns = sanitiseColumns(msg.columns);
+    try {
+      await spindle.userStorage.set(STORAGE_KEY, String(columns));
+      spindle.log.info(`[mobile_column_layout] columns saved → ${columns}`);
+      // Confirm back to the frontend so it can apply the new value immediately.
+      spindle.sendToFrontend({ type: 'COLUMNS_SAVED', columns });
+    } catch (err) {
+      spindle.log.error(`[mobile_column_layout] failed to save columns: ${err.message}`);
+      spindle.sendToFrontend({ type: 'COLUMNS_ERROR', message: err.message });
+    }
+    return;
+  }
+});
