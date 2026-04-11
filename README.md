@@ -1,81 +1,49 @@
-# Grid Column Override — Lumiverse Extension
+# Grid Column Layout
 
-Override the number of card columns in the virtualizer-based character/card
-grid. Instead of the default `auto-fill` layout, you choose exactly how many
-columns to show.
+A Lumiverse extension that transforms the character/content browser from a single horizontal row into a configurable multi-column grid.
 
----
+## What it does
 
-## How it works
-
-Lumiverse renders character lists with a virtual-scroll container:
-
-| CSS class (mangled) | Role |
-|---|---|
-| `_scrollContainer_v15ny_1` | Outer scroll host (virtualizer) |
-| `_row_v15ny_14` | Each virtual row inside the scroller |
-| `_gridLayout_1xexo_62` | The CSS grid that holds the cards |
-
-By default `_gridLayout_1xexo_62` uses  
-`grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))`.
-
-This extension injects a higher-specificity `!important` rule:  
-`grid-template-columns: repeat(N, minmax(0, 1fr))`  
-where **N** is whatever you set in the extension settings.
-
-A `MutationObserver` watches the scroll container so the override stays active
-even as the virtualizer recycles rows dynamically.
-
----
+The browser's card container (`.scrollContainer_v15ny_1`) normally renders cards in a single horizontal scrolling row (`.row_v15ny_14`). This extension overrides that layout with a CSS grid, letting you choose between **1 and 5 columns** via a slider in the sidebar.
 
 ## Installation
 
-1. Add the repo URL in **Lumiverse → Extensions → Install**.
-2. No permissions need to be granted — this extension uses only the free-tier
-   DOM API and `localStorage`.
-
----
+1. In Lumiverse, open **Extensions → Install from GitHub**.
+2. Paste your fork's GitHub URL and confirm.
+3. No extra permissions need to be granted — the extension uses only free-tier APIs (DOM, Storage, Drawer Tabs).
 
 ## Settings
 
-Open **Settings → Extensions → Grid Column Override**.
+Open the **Grid Columns** tab in the ViewportDrawer sidebar (gear icon). Move the slider to pick a column count (1–5). The layout updates immediately and the value is saved for future sessions.
 
-| Setting | Description | Default |
-|---|---|---|
-| **Number of columns** | How many equal-width columns the card grid should have. | `4` |
+## Permissions
 
-Hit **Apply** to apply immediately. The value is saved to `localStorage` and
-restored on every page load.
+None required. This extension uses only free-tier Lumiverse APIs:
 
----
+| API | Usage |
+|-----|-------|
+| `ctx.dom.addStyle` | Injects the grid CSS override |
+| `ctx.storage.get/set` | Persists the column count across sessions |
+| `ctx.ui.registerDrawerTab` | Adds the Settings tab to the sidebar |
 
 ## File structure
 
 ```
-grid-column-override/
+grid-column-layout/
 ├── spindle.json          ← extension manifest
+├── README.md
 ├── src/
 │   └── frontend.ts       ← TypeScript source
 └── dist/
-    └── frontend.js       ← compiled output (ready to use)
+    └── frontend.js       ← compiled output (loaded by Lumiverse)
 ```
 
----
+## How it works
 
-## Building from source
+The extension uses attribute-substring selectors (`[class*="_row_v15ny_"]`) to target the hashed class names in the Lumiverse bundle without coupling to a specific hash string. When the slider changes:
 
-```bash
-bun build src/frontend.ts --outfile dist/frontend.js --format esm
-```
+1. The previous `<style>` injection is removed via the handle returned by `ctx.dom.addStyle`.
+2. A new style block is injected with the updated `grid-template-columns: repeat(N, 1fr)` value.
+3. The new column count is written to `ctx.storage` for the next session.
 
-Or with any bundler that emits ESM with `export function setup(ctx)`.
-
----
-
-## Compatibility note
-
-The class names `_scrollContainer_v15ny_1`, `_row_v15ny_14`, and
-`_gridLayout_1xexo_62` are derived from the minified Lumiverse CSS bundle
-(provided as `css.txt`). If Lumiverse updates its bundle, the attribute
-selector patterns (`[class*="…"]`) used here will continue to match as long
-as the partial name fragments (`v15ny` / `1xexo`) remain stable.
+A `MutationObserver` stamps `data-gcl-active` on the scroll container whenever it appears in the DOM, which is useful for debugging and future hook points.
