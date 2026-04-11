@@ -1,13 +1,11 @@
 {
   "version": "1.0.0",
-  "name": "Character Grid Columns",
-  "identifier": "char_grid_columns",
-  "author": "Extension Author",
-  "github": "https://github.com/you/char-grid-columns",
-  "homepage": "https://github.com/you/char-grid-columns",
-  "description": "Override the default column count on the character grid. Set any number of columns — rows adjust dynamically.",
+  "name": "Grid Column Override",
+  "identifier": "grid_column_override",
+  "author": "You",
+  "github": "https://github.com/you/grid-column-override",
+  "homepage": "https://github.com/you/grid-column-override",
+  "description": "Override the number of columns shown in the character/card grid (virtualizer rows). Configurable from extension settings.",
   "permissions": [],
-  "entry_backend": "backend.js",
-  "entry_frontend": "frontend.js",
-  "minimum_lumiverse_version": "0.1.0"
+  "entry_frontend": "dist/frontend.js"
 }
