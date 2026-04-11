@@ -1,56 +1,90 @@
-// dist/backend.js
-// Card Column Control — backend module
-//
-// Responsibilities:
-//   1. Persist the column preference to spindle.storage
-//   2. Relay the current value to the frontend when it asks
-//   3. Relay updated values back to the frontend after saving
+/**
+ * char_grid_columns — backend.js
+ *
+ * Persists the full settings object in userStorage.
+ * Responds to:
+ *   { type: "GET_SETTINGS" }                  → { settings: { columns, gap, radius, nameSize } }
+ *   { type: "SET_SETTINGS", settings: {...} } → { settings: {...} }
+ *
+ * Also handles the legacy single-value protocol from v1 for smooth upgrades:
+ *   { type: "GET_COLUMNS" }        → { columns: number }
+ *   { type: "SET_COLUMNS", value } → { columns: number }
+ */
 
-const STORAGE_KEY = "column_preference.json";
-const DEFAULT_COLUMNS = 3;
+const STORAGE_KEY = "settings_v2";
 
-async function loadColumns() {
-  try {
-    const raw = await spindle.storage.getJson(STORAGE_KEY, {
-      fallback: { columns: DEFAULT_COLUMNS },
-    });
-    const n = parseInt(raw.columns, 10);
-    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : DEFAULT_COLUMNS;
-  } catch {
-    return DEFAULT_COLUMNS;
-  }
+const DEFAULTS = { columns: 4, gap: 16, radius: 16, nameSize: 14 };
+const LIMITS   = {
+  columns:  { min: 1,  max: 12 },
+  gap:      { min: 4,  max: 32 },
+  radius:   { min: 0,  max: 24 },
+  nameSize: { min: 10, max: 18 },
+};
+
+function clamp(val, min, max) {
+  const n = parseInt(val, 10);
+  return isNaN(n) ? min : Math.max(min, Math.min(max, n));
 }
 
-async function saveColumns(n) {
-  await spindle.storage.setJson(STORAGE_KEY, { columns: n }, { indent: 2 });
+function sanitize(raw) {
+  const base = typeof raw === "object" && raw !== null ? raw : {};
+  return {
+    columns:  clamp(base.columns  ?? DEFAULTS.columns,  LIMITS.columns.min,  LIMITS.columns.max),
+    gap:      clamp(base.gap      ?? DEFAULTS.gap,      LIMITS.gap.min,      LIMITS.gap.max),
+    radius:   clamp(base.radius   ?? DEFAULTS.radius,   LIMITS.radius.min,   LIMITS.radius.max),
+    nameSize: clamp(base.nameSize ?? DEFAULTS.nameSize, LIMITS.nameSize.min, LIMITS.nameSize.max),
+  };
 }
 
-// Listen for messages from the frontend
-spindle.onFrontendMessage(async (payload) => {
-  if (!payload || typeof payload !== "object") return;
+export default async function backend(spindle) {
 
-  // Frontend is asking for the current value on load
-  if (payload.type === "get_columns") {
-    const columns = await loadColumns();
-    spindle.sendToFrontend({ type: "columns_value", columns });
-    return;
-  }
+  spindle.onMessage(async (msg, { reply, userId }) => {
+    switch (msg.type) {
 
-  // Frontend is setting a new value
-  if (payload.type === "set_columns") {
-    const n = parseInt(payload.columns, 10);
-    if (!Number.isFinite(n) || n < 1 || n > 10) {
-      spindle.sendToFrontend({
-        type: "columns_error",
-        message: "Column count must be between 1 and 10.",
-      });
-      return;
+      // ── Current protocol ─────────────────────────────────────────────────
+      case "GET_SETTINGS": {
+        let settings = { ...DEFAULTS };
+        try {
+          const raw = await spindle.userStorage.get(STORAGE_KEY, userId);
+          if (raw) settings = sanitize(JSON.parse(raw));
+        } catch (_) { /* use defaults */ }
+        reply({ settings });
+        break;
+      }
+
+      case "SET_SETTINGS": {
+        const settings = sanitize(msg.settings ?? {});
+        await spindle.userStorage.set(STORAGE_KEY, JSON.stringify(settings), userId);
+        spindle.log(`[char_grid_columns] settings saved: ${JSON.stringify(settings)}`);
+        reply({ settings });
+        break;
+      }
+
+      // ── Legacy v1 protocol (backwards compat) ────────────────────────────
+      case "GET_COLUMNS": {
+        let settings = { ...DEFAULTS };
+        try {
+          const raw = await spindle.userStorage.get(STORAGE_KEY, userId);
+          if (raw) settings = sanitize(JSON.parse(raw));
+        } catch (_) { /* use defaults */ }
+        reply({ columns: settings.columns });
+        break;
+      }
+
+      case "SET_COLUMNS": {
+        let settings = { ...DEFAULTS };
+        try {
+          const raw = await spindle.userStorage.get(STORAGE_KEY, userId);
+          if (raw) settings = sanitize(JSON.parse(raw));
+        } catch (_) { /* ignore */ }
+        settings.columns = clamp(msg.value, LIMITS.columns.min, LIMITS.columns.max);
+        await spindle.userStorage.set(STORAGE_KEY, JSON.stringify(settings), userId);
+        reply({ columns: settings.columns });
+        break;
+      }
+
+      default:
+        break;
     }
-    await saveColumns(n);
-    spindle.sendToFrontend({ type: "columns_value", columns: n });
-    spindle.toast.success(`Card columns set to ${n}`);
-    return;
-  }
-});
-
-spindle.log.info("Card Column Control backend ready.");
+  });
+}

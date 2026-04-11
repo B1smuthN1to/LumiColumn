@@ -1,12 +1,13 @@
 {
   "version": "1.0.0",
-  "name": "Card Column Control",
-  "identifier": "card_column_control",
-  "author": "You",
-  "github": "https://github.com/you/card-column-control",
-  "homepage": "https://github.com/you/card-column-control",
-  "description": "Adds a drawer tab with a slider/input to dynamically set how many character cards appear per row in the grid view.",
+  "name": "Character Grid Columns",
+  "identifier": "char_grid_columns",
+  "author": "Extension Author",
+  "github": "https://github.com/you/char-grid-columns",
+  "homepage": "https://github.com/you/char-grid-columns",
+  "description": "Override the default column count on the character grid. Set any number of columns — rows adjust dynamically.",
   "permissions": [],
-  "entry_backend": "dist/backend.js",
-  "entry_frontend": "dist/frontend.js"
+  "entry_backend": "backend.js",
+  "entry_frontend": "frontend.js",
+  "minimum_lumiverse_version": "0.1.0"
 }
