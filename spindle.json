@@ -1,13 +1,12 @@
 {
   "version": "1.0.0",
-  "name": "Grid Column Layout",
-  "identifier": "grid_column_layout",
-  "author": "grid-column-layout",
-  "github": "https://github.com/your-username/grid-column-layout",
-  "homepage": "https://github.com/your-username/grid-column-layout",
-  "description": "Transforms the character/content browser row into a multi-column grid. Adjust the number of columns (1–5) from the Settings tab.",
+  "name": "Grid Column Control",
+  "identifier": "grid_column_control",
+  "author": "you",
+  "github": "https://github.com/you/grid-column-control",
+  "homepage": "https://github.com/you/grid-column-control",
+  "description": "Override the number of columns shown in the character/volume grid. Configure column count in the Theme section of Settings.",
   "permissions": [],
-  "entry_backend": null,
-  "entry_frontend": "dist/frontend.js",
-  "minimum_lumiverse_version": "0.1.0"
+  "entry_backend": "src/backend.js",
+  "entry_frontend": "src/frontend.js"
 }
