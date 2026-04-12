@@ -6,7 +6,5 @@
   "github": "https://github.com/you/grid-column-control",
   "homepage": "https://github.com/you/grid-column-control",
   "description": "Override the number of columns shown in the character/volume grid. Configure column count in the Theme section of Settings.",
-  "permissions": [],
-  "entry_backend": "src/backend.js",
-  "entry_frontend": "src/frontend.js"
+  "permissions": []
 }
