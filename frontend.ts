@@ -1,16 +1,31 @@
-// dist/frontend.js — Column Layout extension (compiled)
+// frontend.ts — Column Layout extension
+import type { SpindleFrontendContext } from "lumiverse-spindle-types";
 
-export function setup(ctx) {
-  // ── State ──────────────────────────────────────────────────────────────────
+export function setup(ctx: SpindleFrontendContext) {
+  // ── State ─────────────────────────────────────────────────────────────────
   let currentColumns = 2;
-  let removeStyle = null;
+  let removeStyle: (() => void) | null = null;
 
-  // ── CSS builder ────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
-  function buildGridCSS(n) {
-    const cardEnhancements =
-      n > 1
-        ? `
+  /** Build the CSS that forces v15ny_14 inside every v15ny_1 to use N columns */
+  function buildGridCSS(n: number): string {
+    return `
+      /* Column Layout extension – ${n} column(s) */
+      .v15ny_1 .v15ny_14 {
+        display: grid !important;
+        grid-template-columns: repeat(${n}, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+      }
+
+      /* Make direct children (cards) fill their grid cell */
+      .v15ny_1 .v15ny_14 > * {
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+
+      /* Inject a card-like polish when multiple columns are active */
+      ${n > 1 ? `
       .v15ny_1 .v15ny_14 > * {
         border-radius: var(--lumiverse-radius) !important;
         border: 1px solid var(--lumiverse-border) !important;
@@ -22,53 +37,46 @@ export function setup(ctx) {
       .v15ny_1 .v15ny_14 > *:hover {
         border-color: var(--lumiverse-border-hover) !important;
         box-shadow: 0 2px 8px rgba(0,0,0,.15) !important;
-      }`
-        : "";
-
-    return `
-      /* Column Layout extension – ${n} column(s) */
-      .v15ny_1 .v15ny_14 {
-        display: grid !important;
-        grid-template-columns: repeat(${n}, minmax(0, 1fr)) !important;
-        gap: 12px !important;
       }
-      .v15ny_1 .v15ny_14 > * {
-        width: 100% !important;
-        min-width: 0 !important;
-      }
-      ${cardEnhancements}
+      ` : ""}
     `;
   }
 
-  function applyColumns(n) {
+  /** Apply (or re-apply) the column CSS override */
+  function applyColumns(n: number) {
     currentColumns = n;
     if (removeStyle) removeStyle();
     removeStyle = ctx.dom.addStyle(buildGridCSS(n));
   }
 
-  // ── Drawer Tab ─────────────────────────────────────────────────────────────
+  // ── Settings UI (Drawer Tab) ──────────────────────────────────────────────
 
   const tab = ctx.ui.registerDrawerTab({
     id: "column-settings",
     title: "Column Layout",
-    iconSvg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="3" width="5" height="14" rx="1" fill="currentColor" opacity=".9"/>
-      <rect x="7.5" y="3" width="5" height="14" rx="1" fill="currentColor" opacity=".9"/>
-      <rect x="14" y="3" width="5" height="14" rx="1" fill="currentColor" opacity=".9"/>
+    iconSvg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"
+        xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="3" width="5" height="14" rx="1"
+        fill="currentColor" opacity=".9"/>
+      <rect x="7.5" y="3" width="5" height="14" rx="1"
+        fill="currentColor" opacity=".9"/>
+      <rect x="14" y="3" width="5" height="14" rx="1"
+        fill="currentColor" opacity=".9"/>
     </svg>`,
   });
 
+  // Inject settings HTML into the drawer tab
   tab.root.innerHTML = `
     <div class="cl-settings">
       <h2 class="cl-title">Column Layout</h2>
       <p class="cl-desc">
         Controls how many columns are displayed inside
-        <code>v15ny_14</code> containers produced by <code>v15ny_1</code>.
+        <code>v15ny_14</code> containers.
       </p>
 
       <div class="cl-field">
         <div class="cl-label-row">
-          <label class="cl-label" for="cl-slider">Number of Columns</label>
+          <label class="cl-label" for="cl-slider">Columns</label>
           <span class="cl-badge" id="cl-badge">2</span>
         </div>
 
@@ -87,12 +95,15 @@ export function setup(ctx) {
         </div>
       </div>
 
-      <div class="cl-preview" id="cl-preview"></div>
+      <div class="cl-preview" id="cl-preview">
+        <!-- live card preview injected by JS -->
+      </div>
 
-      <p class="cl-hint">Changes apply instantly — no reload needed.</p>
+      <p class="cl-hint">Changes take effect immediately.</p>
     </div>
   `;
 
+  // Style the settings tab
   ctx.dom.addStyle(`
     .cl-settings {
       padding: 16px;
@@ -103,6 +114,7 @@ export function setup(ctx) {
       font-size: 1rem;
       font-weight: 600;
       margin: 0 0 6px;
+      color: var(--lumiverse-text);
     }
     .cl-desc {
       font-size: .825rem;
@@ -117,7 +129,9 @@ export function setup(ctx) {
       padding: 1px 4px;
       font-size: .8rem;
     }
-    .cl-field { margin-bottom: 20px; }
+    .cl-field {
+      margin-bottom: 20px;
+    }
     .cl-label-row {
       display: flex;
       justify-content: space-between;
@@ -127,6 +141,7 @@ export function setup(ctx) {
     .cl-label {
       font-size: .875rem;
       font-weight: 500;
+      color: var(--lumiverse-text);
     }
     .cl-badge {
       display: inline-flex;
@@ -181,10 +196,10 @@ export function setup(ctx) {
     }
   `);
 
-  // ── Preview ────────────────────────────────────────────────────────────────
+  // ── Preview renderer ───────────────────────────────────────────────────────
 
-  function renderPreview(n) {
-    const preview = tab.root.querySelector("#cl-preview");
+  function renderPreview(n: number) {
+    const preview = tab.root.querySelector("#cl-preview") as HTMLElement | null;
     if (!preview) return;
     preview.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
     preview.innerHTML = Array.from(
@@ -193,42 +208,46 @@ export function setup(ctx) {
     ).join("");
   }
 
-  // ── Slider ─────────────────────────────────────────────────────────────────
+  // ── Slider wiring ─────────────────────────────────────────────────────────
 
-  function syncSlider(n) {
-    const slider = tab.root.querySelector("#cl-slider");
-    const badge = tab.root.querySelector("#cl-badge");
+  function syncSlider(n: number) {
+    const slider = tab.root.querySelector("#cl-slider") as HTMLInputElement | null;
+    const badge = tab.root.querySelector("#cl-badge") as HTMLElement | null;
     if (slider) slider.value = String(n);
     if (badge) badge.textContent = String(n);
     renderPreview(n);
   }
 
-  const slider = tab.root.querySelector("#cl-slider");
+  const slider = tab.root.querySelector("#cl-slider") as HTMLInputElement | null;
   if (slider) {
     slider.addEventListener("input", (e) => {
-      const n = parseInt(e.target.value, 10);
-      const badge = tab.root.querySelector("#cl-badge");
+      const n = parseInt((e.target as HTMLInputElement).value, 10);
+      const badge = tab.root.querySelector("#cl-badge") as HTMLElement | null;
       if (badge) badge.textContent = String(n);
       renderPreview(n);
       applyColumns(n);
+      // Persist via backend
       ctx.sendToBackend({ type: "set_columns", columns: n });
     });
   }
 
-  // ── Backend messages ───────────────────────────────────────────────────────
+  // ── Backend message handler ────────────────────────────────────────────────
 
-  ctx.onBackendMessage((payload) => {
-    if (payload.type === "init_columns" || payload.type === "columns_updated") {
+  ctx.onBackendMessage((payload: any) => {
+    if (
+      payload.type === "init_columns" ||
+      payload.type === "columns_updated"
+    ) {
       const n = Math.max(1, Math.min(5, Number(payload.columns) || 2));
       applyColumns(n);
       syncSlider(n);
     }
   });
 
-  // Request the saved value from the backend on init
+  // ── Request current value from backend ────────────────────────────────────
   ctx.sendToBackend({ type: "get_columns" });
 
-  // ── Cleanup ────────────────────────────────────────────────────────────────
+  // ── Cleanup ───────────────────────────────────────────────────────────────
   return () => {
     if (removeStyle) removeStyle();
     ctx.dom.cleanup();

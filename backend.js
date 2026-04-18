@@ -1,47 +1,40 @@
-/**
- * Grid Column Control — backend.js
- *
- * Responsibilities:
- *  - Persist the user's chosen column count in userStorage
- *  - Relay the stored setting to the frontend on startup
- *  - Handle save/load messages from the frontend
- */
+// dist/backend.js — Column Layout extension (compiled)
+// Persists the column-count setting and pushes it to the frontend.
 
-const DEFAULT_COLUMNS = 4
-const STORAGE_KEY = 'settings.json'
+const SETTINGS_FILE = "settings.json";
+const DEFAULT_COLUMNS = 2;
 
-async function loadSettings(userId) {
-  return spindle.userStorage.getJson(STORAGE_KEY, {
+async function loadSettings() {
+  return spindle.storage.getJson(SETTINGS_FILE, {
     fallback: { columns: DEFAULT_COLUMNS },
-    userId,
-  })
+  });
 }
 
-async function saveSettings(userId, settings) {
-  await spindle.userStorage.setJson(STORAGE_KEY, settings, { userId })
+async function saveSettings(settings) {
+  await spindle.storage.setJson(SETTINGS_FILE, settings, { indent: 2 });
 }
 
-// ── Frontend message handler ─────────────────────────────────────────────────
-spindle.onFrontendMessage(async (payload, userId) => {
+// ── Startup ───────────────────────────────────────────────────────────────────
+
+const initialSettings = await loadSettings();
+spindle.sendToFrontend({ type: "init_columns", columns: initialSettings.columns });
+spindle.log.info(`[column_layout] started — columns: ${initialSettings.columns}`);
+
+// ── Frontend message handler ──────────────────────────────────────────────────
+
+spindle.onFrontendMessage(async (payload, _userId) => {
   switch (payload.type) {
-    case 'GET_SETTINGS': {
-      const settings = await loadSettings(userId)
-      spindle.sendToFrontend({ type: 'SETTINGS', settings })
-      break
+    case "set_columns": {
+      const columns = Math.max(1, Math.min(5, Number(payload.columns) || DEFAULT_COLUMNS));
+      await saveSettings({ columns });
+      spindle.sendToFrontend({ type: "columns_updated", columns });
+      spindle.log.info(`[column_layout] columns set to ${columns}`);
+      break;
     }
-
-    case 'SAVE_SETTINGS': {
-      const settings = { columns: Number(payload.columns) || DEFAULT_COLUMNS }
-      await saveSettings(userId, settings)
-      // Echo back so all connected frontends (multi-tab) stay in sync
-      spindle.sendToFrontend({ type: 'SETTINGS', settings })
-      spindle.log.info(`[grid_column_control] Saved columns=${settings.columns} for user ${userId}`)
-      break
+    case "get_columns": {
+      const settings = await loadSettings();
+      spindle.sendToFrontend({ type: "init_columns", columns: settings.columns });
+      break;
     }
-
-    default:
-      spindle.log.warn(`[grid_column_control] Unknown message type: ${payload.type}`)
   }
-})
-
-spindle.log.info('[grid_column_control] Backend ready.')
+});

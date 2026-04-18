@@ -1,10 +1,13 @@
 {
   "version": "1.0.0",
-  "name": "Grid Column Control",
-  "identifier": "grid_column_control",
-  "author": "you",
-  "github": "https://github.com/you/grid-column-control",
-  "homepage": "https://github.com/you/grid-column-control",
-  "description": "Override the number of columns shown in the character/volume grid. Configure column count in the Theme section of Settings.",
-  "permissions": []
+  "name": "Column Layout",
+  "identifier": "column_layout",
+  "author": "column_layout",
+  "github": "https://github.com/you/column-layout",
+  "homepage": "https://github.com/you/column-layout",
+  "description": "Overrides the number of columns shown in v15ny_14 containers. Configure 1–5 columns via the slider in extension settings.",
+  "permissions": [],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "0.1.0"
 }
