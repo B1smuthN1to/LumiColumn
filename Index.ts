@@ -1,103 +1,35 @@
-/**
- * Mobile Column Layout — dist/frontend.js
- *
- * Lumiverse loads frontend modules via dynamic import() and calls the exported
- * `init(ctx)` function.  This file is the compiled/bundled output; because
- * there are no external dependencies we can ship the source directly.
- *
- * See src/frontend.js for full documentation.
- */
+import type { SpindleBackendAPI } from "lumiverse/spindle";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+export default function activate(api: SpindleBackendAPI) {
+  const STORAGE_KEY = "column-count";
+  const DEFAULT_COLUMNS = 2;
 
-const DEFAULT_COLUMNS    = 2;
-const MIN_COLUMNS        = 2;
-const MAX_COLUMNS        = 6;
-const MOBILE_BREAKPOINT  = 600;
-
-const SEL_SCROLL         = '._scrollContainer_v15ny_1';
-const SEL_ROW            = '._row_v15ny_14';
-const SEL_THEMES_PANEL   = '._panel_1gfvo_1';
-const SETTINGS_EL_ID     = 'mcl-settings-block';
-
-// ── State ─────────────────────────────────────────────────────────────────────
-
-let currentColumns   = DEFAULT_COLUMNS;
-let removeStyle      = null;
-let settingsObserver = null;
-
-// ── CSS builder ──────────────────────────────────────────────────────────────
-
-function buildGridCSS(cols) {
-  const gap = cols <= 3 ? 8 : 6;
-
-  return `
-/* ── Mobile Column Layout extension ── */
-@media (max-width: ${MOBILE_BREAKPOINT}px) {
-
-  /* Convert the single-column row into a CSS grid */
-  ${SEL_SCROLL} ${SEL_ROW} {
-    display: grid !important;
-    grid-template-columns: repeat(${cols}, 1fr) !important;
-    gap: ${gap}px !important;
-    padding: ${gap}px !important;
-    align-content: start !important;
-    flex-direction: unset !important;
+  // ── Initialise storage with default ──────────────────────────────
+  async function ensureDefault() {
+    const existing = await api.storage.get(STORAGE_KEY);
+    if (existing === null || existing === undefined) {
+      await api.storage.set(STORAGE_KEY, DEFAULT_COLUMNS);
+    }
   }
 
-  /* Each direct child fills its grid cell */
-  ${SEL_SCROLL} ${SEL_ROW} > * {
-    min-width: 0 !important;
-    width: 100% !important;
-  }
+  ensureDefault();
 
-  /* ── ._card_q6j3q_1  (standard character card) ── */
-  ${SEL_SCROLL} ${SEL_ROW} > ._card_q6j3q_1 {
-    flex-direction: column !important;
-    border-radius: var(--lumiverse-radius-lg, 12px) !important;
-    overflow: hidden !important;
-    contain: layout style paint !important;
-  }
+  // ── Listen for the frontend asking for the current value ─────────
+  api.events.on("column-layout:get", async (_payload, reply) => {
+    const count = (await api.storage.get(STORAGE_KEY)) ?? DEFAULT_COLUMNS;
+    reply({ columns: count });
+  });
 
-  ${SEL_SCROLL} ${SEL_ROW} > ._card_q6j3q_1 ._imageWrap_q6j3q_40 {
-    aspect-ratio: 3 / 4 !important;
-    width: 100% !important;
-    height: auto !important;
-    border-radius: 0 !important;
-  }
+  // ── Listen for the frontend saving a new value ───────────────────
+  api.events.on("column-layout:set", async (payload) => {
+    const raw = Number(payload?.columns);
+    const clamped = Math.max(1, Math.min(5, isNaN(raw) ? DEFAULT_COLUMNS : raw));
+    await api.storage.set(STORAGE_KEY, clamped);
 
-  /* ── ._gridCard_1xexo_72  (grid-layout card variant) ── */
-  ${SEL_SCROLL} ${SEL_ROW} > ._gridCard_1xexo_72 {
-    border-radius: 14px !important;
-  }
-
-  ${SEL_SCROLL} ${SEL_ROW} > ._gridCard_1xexo_72 ._gridCardImage_1xexo_89 {
-    aspect-ratio: 3 / 4 !important;
-    width: 100% !important;
-  }
-
-  /* ── ._listCard_1xexo_177  (list-layout card reflowed as portrait tile) ── */
-  ${SEL_SCROLL} ${SEL_ROW} > ._listCard_1xexo_177 {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    border-radius: 12px !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-  }
-
-  ${SEL_SCROLL} ${SEL_ROW} > ._listCard_1xexo_177 ._imageWrap_q6j3q_40 {
-    aspect-ratio: 3 / 4 !important;
-    width: 100% !important;
-    height: auto !important;
-    border-radius: 0 !important;
-  }
-
-  ${SEL_SCROLL} ${SEL_ROW} > ._listCard_1xexo_177 ._listCardInfo_1xexo_199 {
-    padding: 8px 10px !important;
-  }
-}
-  `.trim();
-}
+    // Broadcast to every connected frontend so all tabs update live
+    api.events.broadcast("column-layout:updated", { columns: clamped });
+  });
+}}
 
 // ── Style management ──────────────────────────────────────────────────────────
 
