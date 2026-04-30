@@ -1,13 +1,18 @@
 {
+  "identifier": "column-layout",
+  "name": "Column Layout",
   "version": "1.0.0",
-  "name": "Mobile Column Layout",
-  "identifier": "mobile_column_layout",
-  "author": "Extension Author",
-  "github": "https://github.com/you/mobile-column-layout",
-  "homepage": "https://github.com/you/mobile-column-layout",
-  "description": "Overrides the mobile character/content list to display multiple columns instead of a single column. Configure the column count from the Themes tab.",
-  "permissions": ["app_manipulation"],
-  "entry_backend": "dist/backend.js",
-  "entry_frontend": "dist/frontend.js",
-  "minimum_lumiverse_version": "0.1.0"
+  "description": "Adjusts the number of columns for character card containers. Adds a 'Length' tab to the drawer with a 1–5 column slider.",
+  "author": "Community",
+  "license": "MIT",
+  "entry": {
+    "backend": "backend/index.ts",
+    "frontend": "frontend/index.ts"
+  },
+  "permissions": [
+    "storage",
+    "events",
+    "frontend",
+    "theme"
+  ]
 }
