@@ -1,5 +1,5 @@
 {
-  "identifier": "column-layout",
+  "identifier": "column_layout",
   "name": "Column Layout",
   "version": "1.0.0",
   "description": "Adjusts the number of columns for character card containers. Adds a 'Length' tab to the drawer with a 1–5 column slider.",
