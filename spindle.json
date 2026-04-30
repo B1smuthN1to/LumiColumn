@@ -1,18 +1,13 @@
 {
-  "identifier": "column_layout",
-  "name": "Column Layout",
   "version": "1.0.0",
-  "description": "Adjusts the number of columns for character card containers. Adds a 'Length' tab to the drawer with a 1–5 column slider.",
-  "author": "Community",
-  "license": "MIT",
-  "entry": {
-    "backend": "backend/index.ts",
-    "frontend": "frontend/index.ts"
-  },
-  "permissions": [
-    "storage",
-    "events",
-    "frontend",
-    "theme"
-  ]
+  "name": "Column Layout",
+  "identifier": "column_layout",
+  "author": "column-layout",
+  "github": "https://github.com/your-username/column-layout",
+  "homepage": "https://github.com/your-username/column-layout",
+  "description": "Adjusts the number of columns shown in the character grid (v15ny_14). Choose 1–5 columns via a drawer tab slider.",
+  "permissions": [],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "0.1.0"
 }
